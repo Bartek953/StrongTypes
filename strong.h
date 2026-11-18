@@ -5,8 +5,16 @@ namespace strong_detail {
 
 }
 
-template <typename T, typename Tag, typename... Skills> class strong;
+template <typename T, typename Tag, typename... Skills> 
+class strong;
 
-template <typename... Skills> struct skills;
+class Skill {
+public:
+    template<typename T>
+    struct mixin;
+}
+
+template <typename... Skills> 
+struct skills;
 
 #endif
