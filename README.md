@@ -14,7 +14,7 @@ Zanim zaczniecie pisać osobno, stwórzcie wspólnie szkielet pliku `strong.h`:
 
 
 
-**Osoba A: Rdzeń `strong`, metaprogramowanie i rozwiązywanie zależności**
+**Osoba A (Karol): Rdzeń `strong`, metaprogramowanie i rozwiązywanie zależności**
 Ta część jest silnie nastawiona na operacje na listach typów w czasie kompilacji (type traits, rekurencja szablonowa).
 
 * **Walidacja typu wartości `T`:** Napisanie konceptu/warunków sprawdzających, czy `T` jest typem arytmetycznym, klasowym lub wskaźnikiem oraz czy nie jest referencją, funkcją, `void`, tablicą C, klasą abstrakcyjną ani nie ma kwalifikatorów `const`/`volatile`.
@@ -39,7 +39,7 @@ Ta część jest silnie nastawiona na operacje na listach typów w czasie kompil
 
 
 
-**Osoba B: Rodziny, umiejętności wbudowane (Mixins) i testy**
+**Osoba B (Bartek): Rodziny, umiejętności wbudowane (Mixins) i testy**
 Ta część skupia się na wzorcu CRTP, *hidden friends*, ograniczeniach `requires`, literałach napisowych w szablonach i specjalizacji biblioteki standardowej.
 
 * **Przestrzeń nazw `ops`:** Zdefiniowanie znaczników rodzin (`access`, `addition`, `scaling`, `equality`, `ordering`, `printing`, `hashing`).
