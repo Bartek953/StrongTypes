@@ -1,0 +1,3 @@
+*.out
+build/
+strong_example

@@ -32,7 +32,8 @@ inline constexpr bool is_strong_v<strong<T, Tag, Skills...>> = true;
 template <typename T, typename Tag, typename... Skills>
 requires strong_detail::valid_strong_value<T>
 class strong : public Skills::template mixin<strong<T, Tag, Skills...>>... {
-    friend typename Skills::template mixin<strong<T, Tag, Skills...>>...;
+    // friend typename Skills::template mixin<strong<T, Tag, Skills...>>...;
+    // doesn't compile rn
 
 public:
     using value_type = T;
