@@ -34,19 +34,20 @@ requires strong_detail::valid_strong_value<T>
 class strong : public Skills::template mixin<strong<T, Tag, Skills...>>... {
     // friend typename Skills::template mixin<strong<T, Tag, Skills...>>...;
     // doesn't compile rn
+    friend class skill_access;
 
 public:
     using value_type = T;
     using tag_type = Tag;
 
-    constexpr strong() requires std::default_initializable<T> : value() {}
+    constexpr strong() requires std::default_initializable<T> : m_value() {}
 
     template <typename... Args>
     requires
     (sizeof...(Args) > 0) && 
     std::constructible_from<T, Args...> &&
     (!is_strong_v<std::remove_cvref_t<Args>> && ...)
-    constexpr explicit strong(Args&&... args) : value(std::forward<Args>(args)...) {}
+    constexpr explicit strong(Args&&... args) : m_value(std::forward<Args>(args)...) {}
     
     constexpr strong(const strong&) = default;
     constexpr strong(strong&&) = default;
@@ -54,7 +55,23 @@ public:
     constexpr strong& operator=(strong&&) = default;
     ~strong() = default;
 private:
-    value_type value;
+    value_type m_value;
+};
+
+namespace strong_detail {
+    template <typename S> struct is_strong : std::false_type {};
+
+    template <typename T, typename Tag, typename... Sk>
+    struct is_strong<strong<T, Tag, Sk...>> : std::true_type {};
+}
+
+class skill_access {
+public:
+    template<typename S>
+        requires strong_detail::is_strong<std::remove_cvref_t<S>>::value
+    static constexpr decltype(auto) get(S strong_object) {
+        return (std::forward<S>(strong_object).m_value);
+    }
 };
 
 class Skill {
