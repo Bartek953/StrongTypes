@@ -22,12 +22,17 @@ template <typename T, typename Tag, typename... Skills>
 requires strong_detail::valid_strong_value<T>
 class strong;
 
-template <typename U>
-inline constexpr bool is_strong_v = false;
+namespace strong_detail {
+    template <typename U>
+    inline constexpr bool is_strong_raw = false;
 
-template <typename T, typename Tag, typename... Skills>
-requires strong_detail::valid_strong_value<T>
-inline constexpr bool is_strong_v<strong<T, Tag, Skills...>> = true;
+    template <typename T, typename Tag, typename... Skills>
+    requires strong_detail::valid_strong_value<T>
+    inline constexpr bool is_strong_raw<strong<T, Tag, Skills...>> = true;
+}
+
+template <typename S>
+inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>;
 
 template <typename T, typename Tag, typename... Skills>
 requires strong_detail::valid_strong_value<T>
@@ -58,18 +63,11 @@ private:
     value_type m_value;
 };
 
-namespace strong_detail {
-    template <typename S> struct is_strong : std::false_type {};
-
-    template <typename T, typename Tag, typename... Sk>
-    struct is_strong<strong<T, Tag, Sk...>> : std::true_type {};
-}
-
 class skill_access {
 public:
     template<typename S>
-        requires strong_detail::is_strong<std::remove_cvref_t<S>>::value
-    static constexpr decltype(auto) get(S strong_object) {
+        requires is_strong_v<std::remove_cvref_t<S>>
+    static constexpr decltype(auto) get(S&& strong_object) {
         return (std::forward<S>(strong_object).m_value);
     }
 };
