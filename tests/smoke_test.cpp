@@ -4,6 +4,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <unordered_set>
 
 TEST(SmokeTest, SmokeTest1) 
 {
@@ -182,4 +183,36 @@ TEST(StrongSmoke, OrderedWith) {
 
     static_assert(Name("a") < Name("b"));
     static_assert(Meters(3.0) >= Meters(2.0));
+}
+
+TEST(StrongSmoke, Printable) {
+    using Meters = strong<double, struct meters_tag, printable<"m">>;
+    using Plain = strong<int, struct plain_tag, printable<>>;
+    using Name = strong<std::string, struct name_tag, printable<" (name)">>;
+
+    std::ostringstream os;
+    os << Meters(7.5);
+    EXPECT_EQ(os.str(), "7.5m");
+
+    os.str("");
+    os << Plain(42) << ' ' << Name("Ala");
+    EXPECT_EQ(os.str(), "42 Ala (name)");
+}
+
+TEST(StrongSmoke, HashableWith) {
+    using Id = strong<int, struct id_tag, hashable, equality>;
+    using Name = strong<std::string, struct name_tag, hashable, equality>;
+    using Const = strong<int, struct const_tag, hashable_with<[](int) { return std::size_t{7}; }>, equality>;
+    using Bare = strong<int, struct bare_tag>;
+
+    EXPECT_EQ(std::hash<Id>{}(Id(5)), std::hash<int>{}(5));
+    EXPECT_EQ(std::hash<Name>{}(Name("Ala")), std::hash<std::string>{}("Ala"));
+    EXPECT_EQ(std::hash<Const>{}(Const(123)), 7u);
+
+    std::unordered_set<Id> set{Id(1), Id(2), Id(1)};
+    EXPECT_EQ(set.size(), 2u);
+    EXPECT_TRUE(set.contains(Id(2)));
+
+    static_assert(std::hash<Const>{}(Const(1)) == 7);
+    static_assert(!std::is_default_constructible_v<std::hash<Bare>>);
 }

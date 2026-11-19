@@ -5,6 +5,9 @@
 #include <type_traits>
 #include <utility>
 #include <functional>
+#include <algorithm>
+#include <cstddef>
+#include <ostream>
 
 namespace strong_detail {
     template <typename T>
@@ -184,5 +187,59 @@ struct ordered_with {
     using needs = equality_with<[](const auto& a, const auto& b){ return Cmp(a, b) == 0; }>;
 };
 using ordered = ordered_with<std::compare_three_way{}>;
+
+namespace strong_detail {
+    template <std::size_t N>
+    struct fixed_string {
+        char data[N]{};
+        constexpr fixed_string(const char (&s)[N]) { std::copy_n(s, N, data); }
+    };
+}
+
+// const char* cannot be directly passed via template.
+template<strong_detail::fixed_string suffix = "">
+struct printable {
+    using family = ops::printing;
+
+    template<typename S>
+    struct mixin {
+        friend std::ostream& operator<<(std::ostream& os, const S& a) {
+            os << skill_access::get(a) << suffix.data;
+            return os;
+        }
+    };
+};
+
+template<auto H>
+struct hashable_with {
+    using family = ops::hashing;
+
+    template<typename S>
+    struct mixin {
+        friend constexpr std::size_t strong_hash_value(const S& a) {
+            return H(skill_access::get(a));
+        }
+    };
+
+    using needs = equality;
+
+    // It's not directly in specification, but's it's needed for std::hash support.
+    template <typename T>
+    static constexpr bool accepts = requires(const T& v) {
+        { H(v) } -> std::convertible_to<std::size_t>;
+    };
+};
+
+using hashable = hashable_with<[](const auto& v) {
+    return std::hash<std::remove_cvref_t<decltype(v)>>{}(v);
+}>;
+
+template <typename T, typename Tag, typename... Skills>
+    requires requires(const strong<T, Tag, Skills...>& s) { strong_hash_value(s); }
+struct std::hash<strong<T, Tag, Skills...>> {
+    constexpr std::size_t operator()(const strong<T, Tag, Skills...>& s) const {
+        return strong_hash_value(s);
+    }
+};
 
 #endif
