@@ -232,3 +232,17 @@ TEST(StrongSmoke, ConvertibleTo) {
     static_assert(!std::is_constructible_v<M, Cm>);
     static_assert(static_cast<Cm>(M(2.0)).value() == 200.0);
 }
+
+TEST(StrongSmoke, DivisibleBy) {
+    using Speed = strong<double, struct speed_tag, readable>;
+    using Time = strong<double, struct time_tag, readable>;
+    using Dist = strong<double, struct dist_tag, readable,
+                        divisible_by<Time, Speed>,
+                        divisible_by<int, double, [](double a, int b) { return a / b / 10; }>>;
+
+    Dist d(100.0);
+    static_assert(std::is_same_v<decltype(d / Time(4.0)), Speed>);
+    EXPECT_DOUBLE_EQ((d / Time(4.0)).value(), 25.0);
+    EXPECT_DOUBLE_EQ(d / 5, 2.0);
+    static_assert((Dist(9.0) / Time(3.0)).value() == 3.0);
+}

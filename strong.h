@@ -242,10 +242,6 @@ struct std::hash<strong<T, Tag, Skills...>> {
     }
 };
 
-// convertible_to<typename Target, auto Conv>, bez rodziny, jawny operator konwersji 
-// do typu Target. Wynik powstaje z Conv(va), a jeżeli Target jest silnym typem, to 
-// przez jego jawny konstruktor. Domyślnie Conv zwraca swój argument bez zmian.
-
 template<typename Target, auto Conv = std::identity{}>
 struct convertible_to {
     template<typename S>
@@ -258,6 +254,21 @@ struct convertible_to {
     template<typename T>
     static constexpr bool accepts = requires(const T& v) {
         requires std::constructible_from<Target, decltype(Conv(v))>;
+    };
+};
+
+template<typename Other, typename Result, auto Op=std::divides<>{}>
+struct divisible_by {
+    template<typename S>
+    struct mixin {
+        friend constexpr Result operator/(const S& a, const Other& o) {
+            if constexpr (is_strong_v<Other>) {
+                return static_cast<Result>(Op(skill_access::get(a), skill_access::get(o)));
+            }
+            else {
+                return static_cast<Result>(Op(skill_access::get(a), o));
+            }
+        }
     };
 };
 
