@@ -170,4 +170,19 @@ struct equality_with {
 };
 using equality = equality_with<std::equal_to<>{}>;
 
+template<auto Cmp>
+struct ordered_with {
+    using family = ops::ordering;
+
+    template<typename S>
+    struct mixin {
+        friend constexpr auto operator<=>(const S& a, const S& b) {
+            return Cmp(skill_access::get(a), skill_access::get(b));
+        }
+    };
+
+    using needs = equality_with<[](const auto& a, const auto& b){ return Cmp(a, b) == 0; }>;
+};
+using ordered = ordered_with<std::compare_three_way{}>;
+
 #endif

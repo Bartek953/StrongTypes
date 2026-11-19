@@ -161,3 +161,25 @@ TEST(StrongSmoke, EqualityWith) {
     static_assert(Meters(3.0) == Meters(3.0));
     static_assert(Name("ab") != Name("cd"));
 }
+
+TEST(StrongSmoke, OrderedWith) {
+    using Meters = strong<double, struct meters_tag, ordered, ordered::needs>;
+    using Name = strong<std::string, struct name_tag, ordered, ordered::needs>;
+    using Rev = strong<int, struct rev_tag,
+        ordered_with<[](int a, int b) { return b <=> a; }>,
+        ordered_with<[](int a, int b) { return b <=> a; }>::needs>;
+
+    Meters a(1.0), b(2.0);
+    static_assert(std::is_same_v<decltype(a <=> b), std::partial_ordering>);
+    EXPECT_TRUE(a < b);
+    EXPECT_TRUE(b > a);
+    EXPECT_TRUE(a <= a);
+    EXPECT_TRUE(a == Meters(1.0));
+    EXPECT_TRUE(a != b);
+
+    static_assert(std::is_same_v<decltype(Rev(1) <=> Rev(2)), std::strong_ordering>);
+    EXPECT_TRUE(Rev(5) < Rev(3));
+
+    static_assert(Name("a") < Name("b"));
+    static_assert(Meters(3.0) >= Meters(2.0));
+}
