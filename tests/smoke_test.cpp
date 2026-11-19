@@ -139,3 +139,25 @@ TEST(StrongSmoke, Scalable) {
 
     static_assert((Meters(1.5) * 4.0).value() == 6.0);
 }
+
+TEST(StrongSmoke, EqualityWith) {
+    using Meters = strong<double, struct meters_tag, equality>;
+    using Name = strong<std::string, struct name_tag, equality>;
+    using Mod10 = strong<int, struct mod10_tag, equality_with<[](int a, int b) { return a % 10 == b % 10; }>>;
+
+    Meters a(1.5), b(1.5), c(2.0);
+    static_assert(std::is_same_v<decltype(a == b), bool>);
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a == c);
+    EXPECT_TRUE(a != c);
+    EXPECT_FALSE(a != b);
+
+    EXPECT_EQ(Name("Ala"), Name("Ala"));
+    EXPECT_NE(Name("Ala"), Name("Ola"));
+
+    EXPECT_TRUE(Mod10(13) == Mod10(23));
+    EXPECT_TRUE(Mod10(13) != Mod10(14));
+
+    static_assert(Meters(3.0) == Meters(3.0));
+    static_assert(Name("ab") != Name("cd"));
+}

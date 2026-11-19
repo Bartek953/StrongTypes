@@ -154,4 +154,20 @@ struct scalable {
     };
 };
 
+template<auto Eq>
+struct equality_with {
+    using family = ops::equality;
+
+    template<typename S>
+    struct mixin {
+        friend constexpr bool operator==(const S& a, const S& b) {
+            return Eq(skill_access::get(a), skill_access::get(b));
+        }
+        friend constexpr bool operator!=(const S& a, const S& b) {
+            return !(a == b);
+        }
+    };
+};
+using equality = equality_with<std::equal_to<>{}>;
+
 #endif
