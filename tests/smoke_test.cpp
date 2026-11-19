@@ -119,3 +119,23 @@ TEST(StrongSmoke, AddableWith) {
 
     static_assert((Seconds(20) + Seconds(22)).value() == 42);
 }
+
+TEST(StrongSmoke, Scalable) {
+    using Meters = strong<double, struct meters_tag, scalable<double>, readable>;
+
+    Meters m(6.0);
+    static_assert(std::is_same_v<decltype(m * 2.0), Meters>);
+    EXPECT_DOUBLE_EQ((m * 2.0).value(), 12.0);
+    EXPECT_DOUBLE_EQ((2.0 * m).value(), 12.0);
+    EXPECT_DOUBLE_EQ((m / 4.0).value(), 1.5);
+
+    m *= 3.0;
+    EXPECT_DOUBLE_EQ(m.value(), 18.0);
+    m /= 2.0;
+    EXPECT_DOUBLE_EQ(m.value(), 9.0);
+
+    static_assert(scalable<double>::accepts<int>);
+    static_assert(!scalable<double>::accepts<std::string>);
+
+    static_assert((Meters(1.5) * 4.0).value() == 6.0);
+}

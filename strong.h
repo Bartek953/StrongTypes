@@ -121,4 +121,37 @@ struct addable_with {
 };
 using addable = addable_with<std::plus<>{}>;
 
+template<typename Scalar>
+struct scalable {
+    using family = ops::scaling;
+
+    template<typename S>
+    struct mixin {
+        friend constexpr S operator*(const S& a, const Scalar& s) {
+            return S(skill_access::get(a) * s);
+        }
+        friend constexpr S operator*(const Scalar& s, const S& a) {
+            return a * s;
+        }
+        friend constexpr S operator/(const S& a, const Scalar& s) {
+            return S(skill_access::get(a) / s);
+        }
+
+        friend constexpr S& operator*=(S& a, const Scalar& s) {
+            a = a * s;
+            return a;
+        }
+        friend constexpr S& operator/=(S& a, const Scalar& s) {
+            a = a / s;
+            return a;
+        }
+    };
+
+    template <typename T>
+    static constexpr bool accepts = requires(const T& a, const Scalar& s) {
+        requires std::constructible_from<T, decltype(a * s)>;
+        requires std::constructible_from<T, decltype(a / s)>;
+    };
+};
+
 #endif
