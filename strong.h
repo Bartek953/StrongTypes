@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <ostream>
+#include <compare>
 
 namespace strong_detail {
     template <typename T>
@@ -116,7 +117,7 @@ struct addable_with {
         friend constexpr S operator+(const S& a, const S& b) {
             return S(Op(skill_access::get(a), skill_access::get(b)));
         }
-        friend constexpr S& operator+=(S& a, S& b) {
+        friend constexpr S& operator+=(S& a, const S& b) {
             a = a + b;
             return a;
         }
