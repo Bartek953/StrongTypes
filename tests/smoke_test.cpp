@@ -216,3 +216,19 @@ TEST(StrongSmoke, HashableWith) {
     static_assert(std::hash<Const>{}(Const(1)) == 7);
     static_assert(!std::is_default_constructible_v<std::hash<Bare>>);
 }
+
+TEST(StrongSmoke, ConvertibleTo) {
+    using Cm = strong<double, struct cm_tag, readable>;
+    using M = strong<double, struct m_tag, readable,
+                     convertible_to<double>,
+                     convertible_to<Cm, [](double v) { return v * 100.0; }>>;
+
+    M m(1.5);
+    EXPECT_DOUBLE_EQ(static_cast<double>(m), 1.5);
+    EXPECT_DOUBLE_EQ(static_cast<Cm>(m).value(), 150.0);
+
+    static_assert(!std::is_convertible_v<M, double>);   // tylko jawnie
+    static_assert(std::is_constructible_v<double, M>);
+    static_assert(!std::is_constructible_v<M, Cm>);
+    static_assert(static_cast<Cm>(M(2.0)).value() == 200.0);
+}
