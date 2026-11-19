@@ -4,6 +4,7 @@
 #include <concepts>
 #include <type_traits>
 #include <utility>
+#include <functional>
 
 namespace strong_detail {
     template <typename T>
@@ -19,7 +20,7 @@ namespace strong_detail {
 }
 
 template <typename T, typename Tag, typename... Skills>
-requires strong_detail::valid_strong_value<T>
+    requires strong_detail::valid_strong_value<T>
 class strong;
 
 namespace strong_detail {
@@ -27,7 +28,7 @@ namespace strong_detail {
     inline constexpr bool is_strong_raw = false;
 
     template <typename T, typename Tag, typename... Skills>
-    requires strong_detail::valid_strong_value<T>
+        requires strong_detail::valid_strong_value<T>
     inline constexpr bool is_strong_raw<strong<T, Tag, Skills...>> = true;
 }
 
@@ -35,7 +36,7 @@ template <typename S>
 inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>;
 
 template <typename T, typename Tag, typename... Skills>
-requires strong_detail::valid_strong_value<T>
+    requires strong_detail::valid_strong_value<T>
 class strong : public Skills::template mixin<strong<T, Tag, Skills...>>... {
     // friend typename Skills::template mixin<strong<T, Tag, Skills...>>...;
     // doesn't compile rn
@@ -48,10 +49,10 @@ public:
     constexpr strong() requires std::default_initializable<T> : m_value() {}
 
     template <typename... Args>
-    requires
-    (sizeof...(Args) > 0) && 
-    std::constructible_from<T, Args...> &&
-    (!is_strong_v<std::remove_cvref_t<Args>> && ...)
+        requires
+        (sizeof...(Args) > 0) && 
+        std::constructible_from<T, Args...> &&
+        (!is_strong_v<std::remove_cvref_t<Args>> && ...)
     constexpr explicit strong(Args&&... args) : m_value(std::forward<Args>(args)...) {}
     
     constexpr strong(const strong&) = default;
@@ -72,13 +73,52 @@ public:
     }
 };
 
-class Skill {
-public:
-    template<typename T>
-    struct mixin;
-};
-
 template <typename... Skills> 
 struct skills;
+
+namespace ops {
+    // Skill families
+    struct access {};
+    struct addition {};
+    struct scaling {};
+    struct equality {};
+    struct ordering {};
+    struct printing {};
+    struct hashing {};
+}
+
+// Skills
+struct readable {
+    using family = ops::access;
+
+    template<typename S>
+    struct mixin {
+        constexpr decltype(auto) value() const {
+            return skill_access::get(static_cast<const S&>(*this));
+        }
+    };
+};
+
+template<auto Op>
+struct addable_with {
+    using family = ops::addition;
+
+    template <typename T>
+    static constexpr bool accepts = requires(const T& x, const T& y) {
+        requires std::constructible_from<T, decltype(Op(x, y))>;
+    };
+
+    template<typename S>
+    struct mixin {
+        friend constexpr S operator+(const S& a, const S& b) {
+            return S(Op(skill_access::get(a), skill_access::get(b)));
+        }
+        friend constexpr S& operator+=(S& a, S& b) {
+            a = a + b;
+            return a;
+        }
+    };
+};
+using addable = addable_with<std::plus<>{}>;
 
 #endif

@@ -89,3 +89,33 @@ TEST(SmokeTest, IsStrongTest1) {
     static_assert(!is_strong_v<int>);
     static_assert(std::is_same_v<decltype(is_strong_v<Meters>), const bool>);
 }
+
+TEST(StrongSmoke, Readable) {
+    using Meters = strong<double, struct meters_tag, readable>;
+
+    Meters m(7.5);
+    const Meters cm(2.0);
+    EXPECT_DOUBLE_EQ(m.value(), 7.5);
+    EXPECT_DOUBLE_EQ(cm.value(), 2.0);
+    EXPECT_DOUBLE_EQ(Meters().value(), 0.0);
+    static_assert(std::is_same_v<decltype(m.value()), const double&>);
+
+    constexpr Meters c(3.0);
+    static_assert(c.value() == 3.0);
+}
+
+TEST(StrongSmoke, AddableWith) {
+    using Seconds = strong<int, struct seconds_tag, addable, readable>;
+    using Product = strong<int, struct product_tag, addable_with<std::multiplies<>{}>, readable>;
+
+    Seconds a(2), b(3);
+    static_assert(std::is_same_v<decltype(a + b), Seconds>);
+    EXPECT_EQ((a + b).value(), 5);
+    a += b;
+    EXPECT_EQ(a.value(), 5);
+
+    Product p(4), q(5);
+    EXPECT_EQ((p + q).value(), 20);
+
+    static_assert((Seconds(20) + Seconds(22)).value() == 42);
+}
