@@ -61,7 +61,7 @@ public:
     
     constexpr strong(const strong&) = default;
     constexpr strong(strong&&) = default;
-    constexpr strong& operator=(const strong&) = default;
+    constexpr strong& operato r=(const strong&) = default;
     constexpr strong& operator=(strong&&) = default;
     ~strong() = default;
 private:
@@ -79,6 +79,48 @@ public:
 
 template <typename... Skills> 
 struct skills;
+
+namespace strong_detail {
+    template <typename... Ts>
+    struct type_list {};
+
+    template <typename List1, typename List2>
+    struct concat;
+
+    template <typename... Ts1, typename... Ts2>
+    struct concat<type_list<Ts1...>, type_list<Ts2...>> {
+        using type = type_list<Ts1..., Ts2...>;
+    };
+
+    template <typename List1, typename List2>
+    using concat_t = typename concat <List1, List2>::type;
+
+    template <typename T>
+    struct flatten_one {
+        using type = type_list<T>;
+    };
+
+    template <typename... Inner>
+    struct flatten_one<skills<Inner...>> {
+        using type = typename flatten<Inner...>::type;
+    };
+
+    template <typename... Ts>
+    struct flatten {
+        using type = type_list<>;
+    };
+
+    template <typename Head, typename... Tail>
+    struct flatten<Head, Tail...> {
+        using type = concat_t<
+            typename flatten_one<Head>::type,
+            typename flatten<Tail...>::type
+        >;
+    };
+
+    template <typename... Ts>
+    using flatten_t = typename flatten<Ts...>::type;
+}
 
 namespace ops {
     // Skill families
