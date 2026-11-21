@@ -49,6 +49,13 @@ class strong : public Skills::template mixin<strong<T, Tag, Skills...>>... {
 public:
     using value_type = T;
     using tag_type = Tag;
+    using explicit_skills = strong_detail::flatten_t<Skills...>;
+
+    static_assert(!strong_detail::has_duplicates_v<explicit_skills>, 
+                "Explicit skill list cannot contain duplicate skills.");
+
+    static_assert(!strong_detail::has_family_conflict_v<explicit_skills>,
+                "Explicit skill list cannot contain multiple skills from the same family.");
 
     constexpr strong() requires std::default_initializable<T> : m_value() {}
 
@@ -93,7 +100,7 @@ namespace strong_detail {
     };
 
     template <typename List1, typename List2>
-    using concat_t = typename concat <List1, List2>::type;
+    using concat_t = typename concat<List1, List2>::type;
 
     template <typename T>
     struct flatten_one {
@@ -120,6 +127,86 @@ namespace strong_detail {
 
     template <typename... Ts>
     using flatten_t = typename flatten<Ts...>::type;
+}
+
+namespace strong_detail {
+    template <typename T, typename List>
+    struct contains;
+
+    template<typename T, typename... Ts>
+    struct contains<T, type_list<Ts...>> {
+        static constexpr bool value = (std::same_as<T, Ts> || ...);
+    };
+
+    template <typename T, typename List>
+    inline constexpr bool contains_v = contain<T, List>::value;
+}
+
+namespace strong_detail {
+    template <typename List>
+    struct has_duplicates;
+
+    template<>
+    struct has_duplicates<type_list<>> {
+        static constexpr bool value = false;
+    };
+
+    template <typename Head, typename... Tail>
+    struct has_duplicates<type_list<Head, Tail...>> {
+        static constexpr bool value = 
+            contains_v<Head, type_list<Tail...>> ||
+            has_duplicates<type_list<Tail...>>::value;
+    };
+
+    template <typename List>
+    inline constexpr bool has_duplicates_v = has_duplicates<List>::value;
+}
+
+namespace strong_detail {
+    template <typename Skill>
+    concept has_family_alias = requires {
+        typename Skill::family;
+    };
+
+    template <typename Skill>
+    struct get_family {
+        static constexpr bool exists = false;
+    };
+
+    template <has_family_alias Skill>
+    struct get_family<Skill> {
+        static constexpr bool exists = true;
+        using type = typename Skill::family;
+    };
+}
+
+namespace strong_detail {
+    template <typename S1, typename S2>
+    consteval bool shares_family() {
+        if constexpr (has_family_alias<S1> && has_family_alias<S2>) {
+            return std::same_as<typename S1::family, typename S2::family>;
+        }
+        else {
+            return false;
+        }
+    }
+
+    template <typename List>
+    struct has_family_conflict;
+
+    template<>
+    struct has_family_conflict<type_list<>> {
+        static constexpr bool value = false;
+    };
+
+    template <typename Head, typename... Tail> 
+    struct has_family_conflict<type_list<Head, Tail...>> {
+        static constexpr bool value =
+            (shares_family<Head, Tail>() || ...) || has_family_conflict<type_list<Tail...>>::value;
+    };
+
+    template <typename List> 
+    inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
 }
 
 namespace ops {
