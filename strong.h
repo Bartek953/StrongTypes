@@ -23,77 +23,21 @@ namespace strong_detail {
         (!std::is_abstract_v<T>);
 }
 
+template <typename... Skills> 
+struct skills{};
+
 template <typename T, typename Tag, typename... Skills>
-    requires strong_detail::valid_strong_value<T>
+requires strong_detail::valid_strong_value<T>
 class strong;
 
 namespace strong_detail {
     template <typename U>
-    inline constexpr bool is_strong_raw = false;
+    struct is_strong_raw : std::false_type {};
 
     template <typename T, typename Tag, typename... Skills>
         requires strong_detail::valid_strong_value<T>
-    inline constexpr bool is_strong_raw<strong<T, Tag, Skills...>> = true;
+    struct is_strong_raw<strong<T, Tag, Skills...>> : std::true_type {};
 }
-
-template <typename S>
-inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>;
-
-template <typename T, typename Tag, typename... Skills>
-    requires strong_detail::valid_strong_value<T>
-class strong : public Skills::template mixin<strong<T, Tag, Skills...>>... {
-    // friend typename Skills::template mixin<strong<T, Tag, Skills...>>...;
-    // doesn't compile rn
-    friend class skill_access;
-
-public:
-    using value_type = T;
-    using tag_type = Tag;
-    using explicit_skills = strong_detail::flatten_t<Skills...>;
-
-    static_assert(!strong_detail::has_duplicates_v<explicit_skills>, 
-                "Explicit skill list cannot contain duplicate skills.");
-
-    static_assert(!strong_detail::has_family_conflict_v<explicit_skills>,
-                "Explicit skill list cannot contain multiple skills from the same family.");
-
-    using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
-
-    static_assert(strong_detail::all_have_mixin<full_skills>::value,
-        "Every skill on the full skill list must define a public mixin<Strong> template.");
-
-    static_assert(strong_detail::all_accept_type<full_skills, T>::value,
-        "At least one skill does not accept the underlying value type T.");
-
-    constexpr strong() requires std::default_initializable<T> : m_value() {}
-
-    template <typename... Args>
-        requires
-        (sizeof...(Args) > 0) && 
-        std::constructible_from<T, Args...> &&
-        (!is_strong_v<std::remove_cvref_t<Args>> && ...)
-    constexpr explicit strong(Args&&... args) : m_value(std::forward<Args>(args)...) {}
-    
-    constexpr strong(const strong&) = default;
-    constexpr strong(strong&&) = default;
-    constexpr strong& operato r=(const strong&) = default;
-    constexpr strong& operator=(strong&&) = default;
-    ~strong() = default;
-private:
-    value_type m_value;
-};
-
-class skill_access {
-public:
-    template<typename S>
-        requires is_strong_v<std::remove_cvref_t<S>>
-    static constexpr decltype(auto) get(S&& strong_object) {
-        return (std::forward<S>(strong_object).m_value);
-    }
-};
-
-template <typename... Skills> 
-struct skills;
 
 namespace strong_detail {
     template <typename... Ts>
@@ -109,6 +53,9 @@ namespace strong_detail {
 
     template <typename List1, typename List2>
     using concat_t = typename concat<List1, List2>::type;
+
+    template <typename... Ts>
+    struct flatten;
 
     template <typename T>
     struct flatten_one {
@@ -147,7 +94,7 @@ namespace strong_detail {
     };
 
     template <typename T, typename List>
-    inline constexpr bool contains_v = contain<T, List>::value;
+    inline constexpr bool contains_v = contains<T, List>::value;
 }
 
 namespace strong_detail {
@@ -224,7 +171,7 @@ namespace strong_detail {
     template <typename Skill, typename... Rs>
     struct is_satisfied<Skill, type_list<Rs...>> {
         static constexpr bool value = 
-            ((std::same_as<Skill, Rs> || shares_family<Skll, Rs>()) || ...);
+            ((std::same_as<Skill, Rs> || shares_family<Skill, Rs>()) || ...);
     };
 
     template <typename Skill, typename ResultList>
@@ -265,7 +212,7 @@ namespace strong_detail {
 
         using next_result = std::conditional_t<skip, Result, concat_t<Result, type_list<Dep>>>;
 
-        using step = process_deps<type_list<RestDeps...?, next_queue, next_result>;
+        using step = process_deps<type_list<RestDeps...>, next_queue, next_result>;
         using queue = typename step::queue;
         using result = typename step::result;
     };
@@ -328,6 +275,99 @@ namespace strong_detail {
         static constexpr bool value = (is_skill_accepted<Ss, T>() && ...);
     };
 }
+
+namespace strong_detail {
+    template<typename Strong, typename SkillList>
+    struct inherit_mixins;
+
+    template <typename Strong, typename... Ss>
+    struct inherit_mixins<Strong, type_list<Ss...>> : public Ss::template mixin<Strong>... {};
+}
+
+namespace strong_detail {
+    template <typename List, typename F>
+    struct list_has_family;
+
+    template <typename... Ss, typename F>
+    struct list_has_family<type_list<Ss...>, F> {
+        static constexpr bool value = (
+            (has_family_alias<Ss> && std::same_as<typename get_family<Ss>::type, F>) || ...
+        );
+    };
+
+    template <typename S, typename F>
+    struct has_family_impl : std::false_type {};
+
+    template <typename T, typename Tag, typename... Skills, typename F>
+    struct has_family_impl<strong<T, Tag, Skills...>, F> {
+        using full = resolve_skills_t<flatten_t<Skills...>>;
+        static constexpr bool value = list_has_family<full, F>::value;
+    };
+}
+
+template <typename S>
+inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>::value;
+
+template <typename S, typename F>
+inline constexpr bool has_family_v = strong_detail::has_family_impl<std::remove_cvref_t<S>, F>::value;
+
+template <typename S>
+    requires is_strong_v<S>
+using underlying_t = typename std::remove_cvref_t<S>::value_type;
+
+template <typename T, typename Tag, typename... Skills>
+requires strong_detail::valid_strong_value<T>
+class strong : public strong_detail::inherit_mixins<
+    strong<T, Tag, Skills...>,
+    strong_detail::resolve_skills_t<strong_detail::flatten_t<Skills...>>
+    > {
+    friend class skill_access;
+
+public:
+    using value_type = T;
+    using tag_type = Tag;
+
+    constexpr strong() requires std::default_initializable<T> = default;
+
+    template <typename... Args>
+        requires
+        (sizeof...(Args) > 0) && 
+        std::constructible_from<T, Args...> &&
+        (!is_strong_v<std::remove_cvref_t<Args>> && ...)
+    constexpr explicit strong(Args&&... args) : value_(std::forward<Args>(args)...) {}
+    
+    constexpr strong(const strong&) = default;
+    constexpr strong(strong&&) = default;
+    constexpr strong& operator=(const strong&) = default;
+    constexpr strong& operator=(strong&&) = default;
+    ~strong() = default;
+private:
+    value_type value_;
+    using explicit_skills = strong_detail::flatten_t<Skills...>;
+
+    static_assert(!strong_detail::has_duplicates_v<explicit_skills>, 
+                "Explicit skill list cannot contain duplicate skills.");
+
+    static_assert(!strong_detail::has_family_conflict_v<explicit_skills>,
+                "Explicit skill list cannot contain multiple skills from the same family.");
+
+    using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
+
+    static_assert(strong_detail::all_have_mixin<full_skills>::value,
+        "Every skill on the full skill list must define a public mixin<Strong> template.");
+
+    static_assert(strong_detail::all_accept_type<full_skills, T>::value,
+        "At least one skill does not accept the underlying value type T.");
+};
+
+class skill_access {
+public:
+    template<typename S>
+        requires is_strong_v<std::remove_cvref_t<S>>
+    static constexpr decltype(auto) get(S&& strong_object) {
+        return (std::forward<S>(strong_object).value_);
+    }
+};
 
 namespace ops {
     // Skill families
