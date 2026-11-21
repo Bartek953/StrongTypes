@@ -57,6 +57,8 @@ public:
     static_assert(!strong_detail::has_family_conflict_v<explicit_skills>,
                 "Explicit skill list cannot contain multiple skills from the same family.");
 
+    using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
+
     constexpr strong() requires std::default_initializable<T> : m_value() {}
 
     template <typename... Args>
@@ -207,6 +209,78 @@ namespace strong_detail {
 
     template <typename List> 
     inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
+}
+
+namespace strong_detail {
+    template<typename Skill, typename ResultList>
+    struct is_satisfied;
+
+    template <typename Skill, typename... Rs>
+    struct is_satisfied<Skill, type_list<Rs...>> {
+        static constexpr bool value = 
+            ((std::same_as<Skill, Rs> || shares_family<Skll, Rs>()) || ...);
+    };
+
+    template <typename Skill, typename ResultList>
+    inline constexpr bool is_satisfied_v = is_satisfied<Skill, ResultList>::value;
+
+    template <typename Skill>
+    concept has_needs_alias = requires {
+        typename Skill::needs;
+    };
+
+    template <typename Skill>
+    struct get_needs {
+        using type = type_list<>;
+    };
+
+    template <has_needs_alias Skill>
+    struct get_needs<Skill> {
+        using type = flatten_t<typename Skill::needs>;
+    };
+
+    template <typename Skill>
+    using get_needs_t = typename get_needs<Skill>::type;
+
+    template <typename DepsList, typename Queue, typename Result>
+    struct process_deps;
+
+    template <typename Queue, typename Result> 
+    struct process_deps<type_list<>, Queue, Result> {
+        using queue = Queue;
+        using result = Result;
+    };
+
+    template <typename Dep, typename... RestDeps, typename Queue, typename Result>
+    struct process_deps<type_list<Dep, RestDeps...>, Queue, Result> {
+        static constexpr bool skip = is_satisfied_v<Dep, Result>;
+
+        using next_queue = std::conditional_t<skip, Queue, concat_t<Queue, type_list<Dep>>>;
+
+        using next_result = std::conditional_t<skip, Result, concat_t<Result, type_list<Dep>>>;
+
+        using step = process_deps<type_list<RestDeps...?, next_queue, next_result>;
+        using queue = typename step::queue;
+        using result = typename step::result;
+    };
+
+    template<typename Queue, typename Result>
+    struct bfs_resolve;
+
+    template <typename Result>
+    struct bfs_resolve<type_list<>, Result> {
+        using type = Result;
+    };
+
+    template <typename Head, typename... Tail, typename Result>
+    struct bfs_resolve<type_list<Head, Tail...>, Result> {
+        using step = process_deps<get_needs_t<Head>, type_list<Tail...>, Result>;
+
+        using type = typename bfs_resolve<typename step::queue, typename step::result>::type;
+    };
+
+    template <typename ExplicitList>
+    using resolve_skills_t = typename bfs_resolve<ExplicitList, ExplicitList>::type;
 }
 
 namespace ops {
