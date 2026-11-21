@@ -59,6 +59,12 @@ public:
 
     using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
 
+    static_assert(strong_detail::all_have_mixin<full_skills>::value,
+        "Every skill on the full skill list must define a public mixin<Strong> template.");
+
+    static_assert(strong_detail::all_accept_type<full_skills, T>::value,
+        "At least one skill does not accept the underlying value type T.");
+
     constexpr strong() requires std::default_initializable<T> : m_value() {}
 
     template <typename... Args>
@@ -281,6 +287,46 @@ namespace strong_detail {
 
     template <typename ExplicitList>
     using resolve_skills_t = typename bfs_resolve<ExplicitList, ExplicitList>::type;
+}
+
+namespace strong_detail {
+    struct dummy_strong{};
+
+    template<typename Skill>
+    concept has_mixin_template = requires {
+        typename Skill::template mixin<dummy_strong>;
+    };
+
+    template <typename Skill, typename T>
+    concept has_accepts_var = requires {
+        {Skill::template accepts<T> } -> std::convertible_to<bool>;
+    };
+
+    template <typename Skill, typename T>
+    consteval bool is_skill_accepted() {
+        if constexpr (has_accepts_var<Skill, T>) {
+            return static_cast<bool>(Skill::template accepts<T>);
+        }
+        else {
+            return true;
+        }
+    }
+
+    template <typename List>
+    struct all_have_mixin;
+
+    template <typename... Ss>
+    struct all_have_mixin<type_list<Ss...>> {
+        static constexpr bool value = (has_mixin_template<Ss> && ...);
+    };
+
+    template <typename List, typename T>
+    struct all_accept_type;
+
+    template <typename... Ss, typename T>
+    struct all_accept_type<type_list<Ss...>, T> {
+        static constexpr bool value = (is_skill_accepted<Ss, T>() && ...);
+    };
 }
 
 namespace ops {
