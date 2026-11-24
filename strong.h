@@ -37,9 +37,7 @@ namespace strong_detail {
     template <typename T, typename Tag, typename... Skills>
         requires strong_detail::valid_strong_value<T>
     struct is_strong_raw<strong<T, Tag, Skills...>> : std::true_type {};
-}
 
-namespace strong_detail {
     template <typename... Ts>
     struct type_list {};
 
@@ -82,9 +80,7 @@ namespace strong_detail {
 
     template <typename... Ts>
     using flatten_t = typename flatten<Ts...>::type;
-}
 
-namespace strong_detail {
     template <typename T, typename List>
     struct contains;
 
@@ -95,9 +91,7 @@ namespace strong_detail {
 
     template <typename T, typename List>
     inline constexpr bool contains_v = contains<T, List>::value;
-}
 
-namespace strong_detail {
     template <typename List>
     struct has_duplicates;
 
@@ -115,9 +109,7 @@ namespace strong_detail {
 
     template <typename List>
     inline constexpr bool has_duplicates_v = has_duplicates<List>::value;
-}
 
-namespace strong_detail {
     template <typename Skill>
     concept has_family_alias = requires {
         typename Skill::family;
@@ -133,9 +125,7 @@ namespace strong_detail {
         static constexpr bool exists = true;
         using type = typename Skill::family;
     };
-}
 
-namespace strong_detail {
     template <typename S1, typename S2>
     consteval bool shares_family() {
         if constexpr (has_family_alias<S1> && has_family_alias<S2>) {
@@ -162,9 +152,7 @@ namespace strong_detail {
 
     template <typename List> 
     inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
-}
 
-namespace strong_detail {
     template<typename Skill, typename ResultList>
     struct is_satisfied;
 
@@ -234,14 +222,10 @@ namespace strong_detail {
 
     template <typename ExplicitList>
     using resolve_skills_t = typename bfs_resolve<ExplicitList, ExplicitList>::type;
-}
 
-namespace strong_detail {
-    struct dummy_strong{};
-
-    template<typename Skill>
+    template<typename Skill, typename Strong>
     concept has_mixin_template = requires {
-        typename Skill::template mixin<dummy_strong>;
+        typename Skill::template mixin<Strong>;
     };
 
     template <typename Skill, typename T>
@@ -259,13 +243,16 @@ namespace strong_detail {
         }
     }
 
-    template <typename List>
+    template <typename List, typename Strong>
     struct all_have_mixin;
 
-    template <typename... Ss>
-    struct all_have_mixin<type_list<Ss...>> {
-        static constexpr bool value = (has_mixin_template<Ss> && ...);
+    template <typename... Ss, typename Strong>
+    struct all_have_mixin<type_list<Ss...>, Strong> {
+        static constexpr bool value = (has_mixin_template<Ss, Strong> && ...);
     };
+
+    template <typename List, typename Strong>
+    inline constexpr bool all_have_mixin_v = all_have_mixin<List, Strong>::value;
 
     template <typename List, typename T>
     struct all_accept_type;
@@ -274,25 +261,31 @@ namespace strong_detail {
     struct all_accept_type<type_list<Ss...>, T> {
         static constexpr bool value = (is_skill_accepted<Ss, T>() && ...);
     };
-}
 
-namespace strong_detail {
+    template <typename List, typename T> 
+    inline constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
+
     template<typename Strong, typename SkillList>
     struct inherit_mixins;
 
     template <typename Strong, typename... Ss>
     struct inherit_mixins<Strong, type_list<Ss...>> : public Ss::template mixin<Strong>... {};
-}
 
-namespace strong_detail {
+    template <typename Skill, typename F>
+    consteval bool is_in_family() {
+        if constexpr (has_family_alias<Skill>) {
+            return std::same_as<typename Skill::family, F>;
+        } else {
+            return false;
+        }
+    }
+
     template <typename List, typename F>
     struct list_has_family;
 
     template <typename... Ss, typename F>
     struct list_has_family<type_list<Ss...>, F> {
-        static constexpr bool value = (
-            (has_family_alias<Ss> && std::same_as<typename get_family<Ss>::type, F>) || ...
-        );
+        static constexpr bool value = (is_in_family<Ss, F>() || ...);
     };
 
     template <typename S, typename F>
@@ -327,7 +320,7 @@ public:
     using value_type = T;
     using tag_type = Tag;
 
-    constexpr strong() requires std::default_initializable<T> = default;
+    constexpr strong() requires std::default_initializable<T> : value_() {};
 
     template <typename... Args>
         requires
@@ -353,10 +346,10 @@ private:
 
     using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
 
-    static_assert(strong_detail::all_have_mixin<full_skills>::value,
+    static_assert(strong_detail::all_have_mixin_v<full_skills, strong>,
         "Every skill on the full skill list must define a public mixin<Strong> template.");
 
-    static_assert(strong_detail::all_accept_type<full_skills, T>::value,
+    static_assert(strong_detail::all_accept_type_v<full_skills, T>,
         "At least one skill does not accept the underlying value type T.");
 };
 
