@@ -26,11 +26,13 @@ namespace strong_detail {
 template <typename... Skills> 
 struct skills{};
 
+// Forward declaration of strong already checks validity of type T.
 template <typename T, typename Tag, typename... Skills>
 requires strong_detail::valid_strong_value<T>
 class strong;
 
 namespace strong_detail {
+    // Type trait that checks whether a type is an instance of template strong.
     template <typename U>
     struct is_strong_raw : std::false_type {};
 
@@ -38,9 +40,11 @@ namespace strong_detail {
     requires strong_detail::valid_strong_value<T>
     struct is_strong_raw<strong<T, Tag, Skills...>> : std::true_type {};
 
+    // To check validity of skills list we need to concatenate and flatten it.
     template <typename... Ts>
     struct type_list {};
 
+    // Given two lists of types we make a new one combining both of them.
     template <typename List1, typename List2>
     struct concat;
 
@@ -52,35 +56,38 @@ namespace strong_detail {
     template <typename List1, typename List2>
     using concat_t = typename concat<List1, List2>::type;
 
+    // We need to flatten nested skills<...> packs into a single type_list.
     template <typename... Ts>
     struct flatten;
 
+    // Packs a single element into a type_list.
     template <typename T>
     struct flatten_one {
         using type = type_list<T>;
     };
 
+    // Unpacks a package of skills into a type_list.
     template <typename... Inner>
     struct flatten_one<skills<Inner...>> {
         using type = typename flatten<Inner...>::type;
     };
 
+    // Base of recursion, for an empty argument list returns empty type_list.
     template <typename... Ts>
     struct flatten {
         using type = type_list<>;
     };
 
+    // Recursively, flattens first element and then the remaining elements.
     template <typename Head, typename... Tail>
     struct flatten<Head, Tail...> {
-        using type = concat_t<
-            typename flatten_one<Head>::type,
-            typename flatten<Tail...>::type
-        >;
+        using type = concat_t<typename flatten_one<Head>::type, typename flatten<Tail...>::type>;
     };
 
     template <typename... Ts>
     using flatten_t = typename flatten<Ts...>::type;
 
+    // Checks whether a list of types contains a type T using a fold expression.
     template <typename T, typename List>
     struct contains;
 
@@ -92,29 +99,33 @@ namespace strong_detail {
     template <typename T, typename List>
     inline constexpr bool contains_v = contains<T, List>::value;
 
+    // Checks whether a type_list has duplicated types.
     template <typename List>
     struct has_duplicates;
 
+    // Base of recursion, empty type_list does not have duplicates.
     template<>
     struct has_duplicates<type_list<>> {
         static constexpr bool value = false;
     };
 
+    // Compares first element with the rest of the list, 
+    // then recursively does it for the remaining ones. 
     template <typename Head, typename... Tail>
     struct has_duplicates<type_list<Head, Tail...>> {
-        static constexpr bool value = 
-            contains_v<Head, type_list<Tail...>> ||
-            has_duplicates<type_list<Tail...>>::value;
+        static constexpr bool value = contains_v<Head, type_list<Tail...>>
+            || has_duplicates<type_list<Tail...>>::value;
     };
 
     template <typename List>
     inline constexpr bool has_duplicates_v = has_duplicates<List>::value;
 
     template <typename Skill>
-    concept has_family_alias = requires {
-        typename Skill::family;
+    concept has_family_alias = requires { 
+        typename Skill::family; 
     };
 
+    // If two skills are assigned a family it compares whether they share it.
     template <typename S1, typename S2>
     consteval bool shares_family() {
         if constexpr (has_family_alias<S1> && has_family_alias<S2>) {
@@ -128,11 +139,14 @@ namespace strong_detail {
     template <typename List>
     struct has_family_conflict;
 
+    // Base of recursion, empty list does not have family conflict.
     template<>
     struct has_family_conflict<type_list<>> {
         static constexpr bool value = false;
     };
 
+    // Checks whether first element shares family with any of the remaining ones,
+    // then recursively does it for the rest of the elements.
     template <typename Head, typename... Tail> 
     struct has_family_conflict<type_list<Head, Tail...>> {
         static constexpr bool value =
@@ -142,13 +156,14 @@ namespace strong_detail {
     template <typename List> 
     inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
 
+    // Checks whether a skill or a skill from the same family
+    // is already added to the list, during dependency resolution.
     template<typename Skill, typename ResultList>
     struct is_satisfied;
 
     template <typename Skill, typename... Rs>
     struct is_satisfied<Skill, type_list<Rs...>> {
-        static constexpr bool value = 
-            ((std::same_as<Skill, Rs> || shares_family<Skill, Rs>()) || ...);
+        static constexpr bool value = ((std::same_as<Skill, Rs> || shares_family<Skill, Rs>()) || ...);
     };
 
     template <typename Skill, typename ResultList>
@@ -159,11 +174,13 @@ namespace strong_detail {
         typename Skill::needs;
     };
 
+    // Skill without needs does not have dependencies.
     template <typename Skill>
     struct get_needs {
         using type = type_list<>;
     };
 
+    // Needs of a skill can be nested so we flatten the list of its needs.
     template <has_needs_alias Skill>
     struct get_needs<Skill> {
         using type = flatten_t<typename Skill::needs>;
@@ -173,44 +190,58 @@ namespace strong_detail {
     using get_needs_t = typename get_needs<Skill>::type;
 
     template <typename DepsList, typename Queue, typename Result>
-    struct process_deps;
+    struct process_single_dependencies;
 
+    // Base of recursion, empty list of dependencies has nothing to resolve.
     template <typename Queue, typename Result> 
-    struct process_deps<type_list<>, Queue, Result> {
+    struct process_single_dependencies<type_list<>, Queue, Result> {
         using queue = Queue;
         using result = Result;
     };
 
+    // Processes the direct dependencies (DepsList) of a single skill.
+    // Queue is the global BFS queue of skills waiting to have their dependencies resolved.
+    // Result stores all skills collected so far.
+    // For each dependency in DepsList, if it is not yet satisfied in Result,
+    // it is appended to both Queue and Result, then the remaining dependencies are processed recursively.
     template <typename Dep, typename... RestDeps, typename Queue, typename Result>
-    struct process_deps<type_list<Dep, RestDeps...>, Queue, Result> {
+    struct process_single_dependencies<type_list<Dep, RestDeps...>, Queue, Result> {
         static constexpr bool skip = is_satisfied_v<Dep, Result>;
 
+        // When dependency is not on a result list we need to process its own dependencies,
+        // so we add it to the end of the queue and to the result list.
         using next_queue = std::conditional_t<skip, Queue, concat_t<Queue, type_list<Dep>>>;
-
         using next_result = std::conditional_t<skip, Result, concat_t<Result, type_list<Dep>>>;
 
-        using step = process_deps<type_list<RestDeps...>, next_queue, next_result>;
+        // Then we recursively do the same for the rest of dependencies.
+        using step = process_single_dependencies<type_list<RestDeps...>, next_queue, next_result>;
+
+        // After processing we can return queue and result.
         using queue = typename step::queue;
         using result = typename step::result;
     };
 
+    // We do the dependencies resolving in a bfs style meaning that
+    // firstly we resolve dependencies of the first skill and add them 
+    // to queue to process them at the end, then we recursively do the same
+    // for the remaining skills.
     template<typename Queue, typename Result>
-    struct bfs_resolve;
+    struct bfs_resolve_dependencies;
 
     template <typename Result>
-    struct bfs_resolve<type_list<>, Result> {
+    struct bfs_resolve_dependencies<type_list<>, Result> {
         using type = Result;
     };
 
     template <typename Head, typename... Tail, typename Result>
-    struct bfs_resolve<type_list<Head, Tail...>, Result> {
-        using step = process_deps<get_needs_t<Head>, type_list<Tail...>, Result>;
+    struct bfs_resolve_dependencies<type_list<Head, Tail...>, Result> {
+        using step = process_single_dependencies<get_needs_t<Head>, type_list<Tail...>, Result>;
 
-        using type = typename bfs_resolve<typename step::queue, typename step::result>::type;
+        using type = typename bfs_resolve_dependencies<typename step::queue, typename step::result>::type;
     };
 
     template <typename ExplicitList>
-    using resolve_skills_t = typename bfs_resolve<ExplicitList, ExplicitList>::type;
+    using resolve_skills_t = typename bfs_resolve_dependencies<ExplicitList, ExplicitList>::type;
 
     template<typename Skill, typename Strong>
     concept has_mixin_template = requires {
@@ -218,13 +249,14 @@ namespace strong_detail {
     };
 
     template <typename Skill, typename T>
-    concept has_accepts_var = requires {
-        {Skill::template accepts<T> } -> std::convertible_to<bool>;
+    concept has_accepts_variable = requires {
+        {Skill::template accepts<T>} -> std::convertible_to<bool>;
     };
 
+    // Checks if skill accepts type value of type T.
     template <typename Skill, typename T>
     consteval bool is_skill_accepted() {
-        if constexpr (has_accepts_var<Skill, T>) {
+        if constexpr (has_accepts_variable<Skill, T>) {
             return static_cast<bool>(Skill::template accepts<T>);
         }
         else {
@@ -232,6 +264,7 @@ namespace strong_detail {
         }
     }
 
+    // Checks whether all skills have mixin template.
     template <typename List, typename Strong>
     struct all_have_mixin;
 
@@ -243,6 +276,7 @@ namespace strong_detail {
     template <typename List, typename Strong>
     inline constexpr bool all_have_mixin_v = all_have_mixin<List, Strong>::value;
 
+    // Checks whether all skills accept a given type.
     template <typename List, typename T>
     struct all_accept_type;
 
@@ -254,14 +288,16 @@ namespace strong_detail {
     template <typename List, typename T> 
     inline constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
 
-    // Gdy coś jest nie tak — pusta baza (brak brzydkich błędów dziedziczenia)
+    // When something is wrong with the skills in strong.
     template <typename Strong, typename SkillList, bool Valid>
     struct inherit_mixins {};
 
-    // Gdy wszystko jest poprawne — normalne dziedziczenie po mixinach
+    // When strong is correct and can inherit from mixins. 
     template <typename Strong, typename... Ss>
     struct inherit_mixins<Strong, type_list<Ss...>, true> : public Ss::template mixin<Strong>... {};
 
+    // Resolves skills and selects the CRTP mixin base class if valid,
+    // or an empty base otherwise so that static_asserts inside strong produce clean errors.
     template <typename T, typename Strong, typename... Skills>
     struct strong_base {
         using explicit_skills = flatten_t<Skills...>;
@@ -285,6 +321,7 @@ namespace strong_detail {
         }
     }
 
+    // Checks whether a given family is on a skills list.
     template <typename List, typename F>
     struct list_has_family;
 
@@ -292,7 +329,8 @@ namespace strong_detail {
     struct list_has_family<type_list<Ss...>, F> {
         static constexpr bool value = (is_in_family<Ss, F>() || ...);
     };
-
+    
+    // Checks if strong type has a skill from family F, it defaults to false for non-strong types.
     template <typename S, typename F>
     struct has_family_impl : std::false_type {};
 
@@ -303,6 +341,7 @@ namespace strong_detail {
     };
 }
 
+// Public type traits.
 template <typename S>
 inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>::value;
 
@@ -310,7 +349,7 @@ template <typename S, typename F>
 inline constexpr bool has_family_v = strong_detail::has_family_impl<std::remove_cvref_t<S>, F>::value;
 
 template <typename S>
-    requires is_strong_v<S>
+requires is_strong_v<S>
 using underlying_t = typename std::remove_cvref_t<S>::value_type;
 
 template <typename T, typename Tag, typename... Skills>
@@ -336,6 +375,7 @@ public:
     constexpr strong& operator=(const strong&) = default;
     constexpr strong& operator=(strong&&) = default;
     ~strong() = default;
+
 private:
     value_type value_;
     using explicit_skills = strong_detail::flatten_t<Skills...>;
@@ -508,7 +548,7 @@ struct hashable_with {
 
     using needs = equality;
 
-    // It's not directly in specification, but's it's needed for std::hash support.
+    // It's not directly in specification, but it's needed for std::hash support.
     template <typename T>
     static constexpr bool accepts = requires(const T& v) {
         { H(v) } -> std::convertible_to<std::size_t>;
