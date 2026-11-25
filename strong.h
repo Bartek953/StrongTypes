@@ -90,7 +90,7 @@ namespace strong_detail {
     };
 
     template <typename T, typename List>
-    constexpr bool contains_v = contains<T, List>::value;
+    inline constexpr bool contains_v = contains<T, List>::value;
 
     template <typename List>
     struct has_duplicates;
@@ -108,7 +108,7 @@ namespace strong_detail {
     };
 
     template <typename List>
-    constexpr bool has_duplicates_v = has_duplicates<List>::value;
+    inline constexpr bool has_duplicates_v = has_duplicates<List>::value;
 
     template <typename Skill>
     concept has_family_alias = requires {
@@ -151,7 +151,7 @@ namespace strong_detail {
     };
 
     template <typename List> 
-    constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
+    inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
 
     template<typename Skill, typename ResultList>
     struct is_satisfied;
@@ -163,7 +163,7 @@ namespace strong_detail {
     };
 
     template <typename Skill, typename ResultList>
-    constexpr bool is_satisfied_v = is_satisfied<Skill, ResultList>::value;
+    inline constexpr bool is_satisfied_v = is_satisfied<Skill, ResultList>::value;
 
     template <typename Skill>
     concept has_needs_alias = requires {
@@ -252,7 +252,7 @@ namespace strong_detail {
     };
 
     template <typename List, typename Strong>
-    constexpr bool all_have_mixin_v = all_have_mixin<List, Strong>::value;
+    inline constexpr bool all_have_mixin_v = all_have_mixin<List, Strong>::value;
 
     template <typename List, typename T>
     struct all_accept_type;
@@ -263,7 +263,7 @@ namespace strong_detail {
     };
 
     template <typename List, typename T> 
-    constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
+    inline constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
 
     template<typename Strong, typename SkillList>
     struct inherit_mixins;
@@ -299,10 +299,10 @@ namespace strong_detail {
 }
 
 template <typename S>
-constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>::value;
+inline constexpr bool is_strong_v = strong_detail::is_strong_raw<std::remove_cvref_t<S>>::value;
 
 template <typename S, typename F>
-constexpr bool has_family_v = strong_detail::has_family_impl<std::remove_cvref_t<S>, F>::value;
+inline constexpr bool has_family_v = strong_detail::has_family_impl<std::remove_cvref_t<S>, F>::value;
 
 template <typename S>
     requires is_strong_v<S>
