@@ -115,17 +115,6 @@ namespace strong_detail {
         typename Skill::family;
     };
 
-    template <typename Skill>
-    struct get_family {
-        static constexpr bool exists = false;
-    };
-
-    template <has_family_alias Skill>
-    struct get_family<Skill> {
-        static constexpr bool exists = true;
-        using type = typename Skill::family;
-    };
-
     template <typename S1, typename S2>
     consteval bool shares_family() {
         if constexpr (has_family_alias<S1> && has_family_alias<S2>) {
@@ -275,17 +264,17 @@ namespace strong_detail {
 
     template <typename T, typename Strong, typename... Skills>
     struct strong_base {
-    using explicit_skills = flatten_t<Skills...>;
-    using full_skills = resolve_skills_t<explicit_skills>;
+        using explicit_skills = flatten_t<Skills...>;
+        using full_skills = resolve_skills_t<explicit_skills>;
 
-    static constexpr bool valid =
-        !has_duplicates_v<explicit_skills> &&
-        !has_family_conflict_v<explicit_skills> &&
-        all_have_mixin_v<full_skills, Strong> &&
-        all_accept_type_v<full_skills, T>;
+        static constexpr bool valid =
+            !has_duplicates_v<explicit_skills> &&
+            !has_family_conflict_v<explicit_skills> &&
+            all_have_mixin_v<full_skills, Strong> &&
+            all_accept_type_v<full_skills, T>;
 
-    using type = inherit_mixins<Strong, full_skills, valid>;
-};
+        using type = inherit_mixins<Strong, full_skills, valid>;
+    };
 
     template <typename Skill, typename F>
     consteval bool is_in_family() {
@@ -339,7 +328,7 @@ public:
         requires
         (sizeof...(Args) > 0) && 
         std::constructible_from<T, Args...> &&
-        (!is_strong_v<std::remove_cvref_t<Args>> && ...)
+        (!is_strong_v<Args> && ...)
     constexpr explicit strong(Args&&... args) : value_(std::forward<Args>(args)...) {}
     
     constexpr strong(const strong&) = default;
@@ -369,7 +358,7 @@ private:
 class skill_access {
 public:
     template<typename S>
-        requires is_strong_v<std::remove_cvref_t<S>>
+        requires is_strong_v<S>
     static constexpr decltype(auto) get(S&& strong_object) {
         return (std::forward<S>(strong_object).value_);
     }
