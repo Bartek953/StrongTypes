@@ -265,11 +265,27 @@ namespace strong_detail {
     template <typename List, typename T> 
     inline constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
 
-    template<typename Strong, typename SkillList>
-    struct inherit_mixins;
+    // Gdy coś jest nie tak — pusta baza (brak brzydkich błędów dziedziczenia)
+    template <typename Strong, typename SkillList, bool Valid>
+    struct inherit_mixins {};
 
+    // Gdy wszystko jest poprawne — normalne dziedziczenie po mixinach
     template <typename Strong, typename... Ss>
-    struct inherit_mixins<Strong, type_list<Ss...>> : public Ss::template mixin<Strong>... {};
+    struct inherit_mixins<Strong, type_list<Ss...>, true> : public Ss::template mixin<Strong>... {};
+
+    template <typename T, typename Strong, typename... Skills>
+    struct strong_base {
+    using explicit_skills = flatten_t<Skills...>;
+    using full_skills = resolve_skills_t<explicit_skills>;
+
+    static constexpr bool valid =
+        !has_duplicates_v<explicit_skills> &&
+        !has_family_conflict_v<explicit_skills> &&
+        all_have_mixin_v<full_skills, Strong> &&
+        all_accept_type_v<full_skills, T>;
+
+    using type = inherit_mixins<Strong, full_skills, valid>;
+};
 
     template <typename Skill, typename F>
     consteval bool is_in_family() {
@@ -310,17 +326,14 @@ using underlying_t = typename std::remove_cvref_t<S>::value_type;
 
 template <typename T, typename Tag, typename... Skills>
 requires strong_detail::valid_strong_value<T>
-class strong : public strong_detail::inherit_mixins<
-    strong<T, Tag, Skills...>,
-    strong_detail::resolve_skills_t<strong_detail::flatten_t<Skills...>>
-    > {
+class strong : public strong_detail::strong_base<T, strong<T, Tag, Skills...>, Skills...>::type {
     friend class skill_access;
 
 public:
     using value_type = T;
     using tag_type = Tag;
 
-    constexpr strong() requires std::default_initializable<T> : value_() {};
+    constexpr strong() requires std::default_initializable<T> : value_() {}
 
     template <typename... Args>
         requires
