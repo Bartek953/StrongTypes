@@ -1,34 +1,29 @@
 #ifndef STRONG_H
 #define STRONG_H
 
+#include <algorithm>
+#include <compare>
 #include <concepts>
+#include <cstddef>
+#include <functional>
+#include <ostream>
 #include <type_traits>
 #include <utility>
-#include <functional>
-#include <algorithm>
-#include <cstddef>
-#include <ostream>
-#include <compare>
 
 namespace strong_detail {
     template <typename T>
-    concept valid_strong_value = 
-        (std::is_arithmetic_v<T> || std::is_class_v<T> || std::is_pointer_v<T>) &&
-        (!std::is_reference_v<T>) &&
-        (!std::is_function_v<T>) &&
-        (!std::is_void_v<T>) &&
-        (!std::is_const_v<T>) &&
-        (!std::is_volatile_v<T>) && 
-        (!std::is_array_v<T>) &&
-        (!std::is_abstract_v<T>);
+    concept valid_strong_value = (std::is_arithmetic_v<T> || std::is_class_v<T> || std::is_pointer_v<T>) &&
+                                 (!std::is_reference_v<T>) && (!std::is_function_v<T>) &&
+                                 (!std::is_void_v<T>) && (!std::is_const_v<T>) && (!std::is_volatile_v<T>) &&
+                                 (!std::is_array_v<T>) && (!std::is_abstract_v<T>);
 }
 
-template <typename... Skills> 
-struct skills{};
+template <typename... Skills>
+struct skills {};
 
 // Forward declaration of strong already checks validity of type T.
 template <typename T, typename Tag, typename... Skills>
-requires strong_detail::valid_strong_value<T>
+    requires strong_detail::valid_strong_value<T>
 class strong;
 
 namespace strong_detail {
@@ -37,7 +32,7 @@ namespace strong_detail {
     struct is_strong_raw : std::false_type {};
 
     template <typename T, typename Tag, typename... Skills>
-    requires strong_detail::valid_strong_value<T>
+        requires strong_detail::valid_strong_value<T>
     struct is_strong_raw<strong<T, Tag, Skills...>> : std::true_type {};
 
     // To check validity of skills list we need to concatenate and flatten it.
@@ -91,7 +86,7 @@ namespace strong_detail {
     template <typename T, typename List>
     struct contains;
 
-    template<typename T, typename... Ts>
+    template <typename T, typename... Ts>
     struct contains<T, type_list<Ts...>> {
         static constexpr bool value = (std::same_as<T, Ts> || ...);
     };
@@ -104,34 +99,31 @@ namespace strong_detail {
     struct has_duplicates;
 
     // Base of recursion, empty type_list does not have duplicates.
-    template<>
+    template <>
     struct has_duplicates<type_list<>> {
         static constexpr bool value = false;
     };
 
-    // Compares first element with the rest of the list, 
-    // then recursively does it for the remaining ones. 
+    // Compares first element with the rest of the list,
+    // then recursively does it for the remaining ones.
     template <typename Head, typename... Tail>
     struct has_duplicates<type_list<Head, Tail...>> {
-        static constexpr bool value = contains_v<Head, type_list<Tail...>>
-            || has_duplicates<type_list<Tail...>>::value;
+        static constexpr bool value =
+            contains_v<Head, type_list<Tail...>> || has_duplicates<type_list<Tail...>>::value;
     };
 
     template <typename List>
     inline constexpr bool has_duplicates_v = has_duplicates<List>::value;
 
     template <typename Skill>
-    concept has_family_alias = requires { 
-        typename Skill::family; 
-    };
+    concept has_family_alias = requires { typename Skill::family; };
 
     // If two skills are assigned a family it compares whether they share it.
     template <typename S1, typename S2>
     consteval bool shares_family() {
         if constexpr (has_family_alias<S1> && has_family_alias<S2>) {
             return std::same_as<typename S1::family, typename S2::family>;
-        }
-        else {
+        } else {
             return false;
         }
     }
@@ -140,25 +132,25 @@ namespace strong_detail {
     struct has_family_conflict;
 
     // Base of recursion, empty list does not have family conflict.
-    template<>
+    template <>
     struct has_family_conflict<type_list<>> {
         static constexpr bool value = false;
     };
 
     // Checks whether first element shares family with any of the remaining ones,
     // then recursively does it for the rest of the elements.
-    template <typename Head, typename... Tail> 
+    template <typename Head, typename... Tail>
     struct has_family_conflict<type_list<Head, Tail...>> {
         static constexpr bool value =
             (shares_family<Head, Tail>() || ...) || has_family_conflict<type_list<Tail...>>::value;
     };
 
-    template <typename List> 
+    template <typename List>
     inline constexpr bool has_family_conflict_v = has_family_conflict<List>::value;
 
     // Checks whether a skill or a skill from the same family
     // is already added to the list, during dependency resolution.
-    template<typename Skill, typename ResultList>
+    template <typename Skill, typename ResultList>
     struct is_satisfied;
 
     template <typename Skill, typename... Rs>
@@ -170,9 +162,7 @@ namespace strong_detail {
     inline constexpr bool is_satisfied_v = is_satisfied<Skill, ResultList>::value;
 
     template <typename Skill>
-    concept has_needs_alias = requires {
-        typename Skill::needs;
-    };
+    concept has_needs_alias = requires { typename Skill::needs; };
 
     // Skill without needs does not have dependencies.
     template <typename Skill>
@@ -193,7 +183,7 @@ namespace strong_detail {
     struct process_single_dependencies;
 
     // Base of recursion, empty list of dependencies has nothing to resolve.
-    template <typename Queue, typename Result> 
+    template <typename Queue, typename Result>
     struct process_single_dependencies<type_list<>, Queue, Result> {
         using queue = Queue;
         using result = Result;
@@ -222,10 +212,10 @@ namespace strong_detail {
     };
 
     // We do the dependencies resolving in a bfs style meaning that
-    // firstly we resolve dependencies of the first skill and add them 
+    // firstly we resolve dependencies of the first skill and add them
     // to queue to process them at the end, then we recursively do the same
     // for the remaining skills.
-    template<typename Queue, typename Result>
+    template <typename Queue, typename Result>
     struct bfs_resolve_dependencies;
 
     template <typename Result>
@@ -243,14 +233,12 @@ namespace strong_detail {
     template <typename ExplicitList>
     using resolve_skills_t = typename bfs_resolve_dependencies<ExplicitList, ExplicitList>::type;
 
-    template<typename Skill, typename Strong>
-    concept has_mixin_template = requires {
-        typename Skill::template mixin<Strong>;
-    };
+    template <typename Skill, typename Strong>
+    concept has_mixin_template = requires { typename Skill::template mixin<Strong>; };
 
     template <typename Skill, typename T>
     concept has_accepts_variable = requires {
-        {Skill::template accepts<T>} -> std::convertible_to<bool>;
+        { Skill::template accepts<T> } -> std::convertible_to<bool>;
     };
 
     // Checks if skill accepts type value of type T.
@@ -258,8 +246,7 @@ namespace strong_detail {
     consteval bool is_skill_accepted() {
         if constexpr (has_accepts_variable<Skill, T>) {
             return static_cast<bool>(Skill::template accepts<T>);
-        }
-        else {
+        } else {
             return true;
         }
     }
@@ -285,14 +272,14 @@ namespace strong_detail {
         static constexpr bool value = (is_skill_accepted<Ss, T>() && ...);
     };
 
-    template <typename List, typename T> 
+    template <typename List, typename T>
     inline constexpr bool all_accept_type_v = all_accept_type<List, T>::value;
 
     // When something is wrong with the skills in strong.
     template <typename Strong, typename SkillList, bool Valid>
     struct inherit_mixins {};
 
-    // When strong is correct and can inherit from mixins. 
+    // When strong is correct and can inherit from mixins.
     template <typename Strong, typename... Ss>
     struct inherit_mixins<Strong, type_list<Ss...>, true> : public Ss::template mixin<Strong>... {};
 
@@ -307,7 +294,7 @@ namespace strong_detail {
         static constexpr bool no_family_conflict = !has_family_conflict_v<explicit_skills>;
         static constexpr bool all_mixins = all_have_mixin_v<full_skills, Strong>;
         static constexpr bool all_accepted = all_accept_type_v<full_skills, T>;
-        
+
         static constexpr bool valid = no_duplicates && no_family_conflict && all_mixins && all_accepted;
 
         using type = inherit_mixins<Strong, full_skills, valid>;
@@ -330,7 +317,7 @@ namespace strong_detail {
     struct list_has_family<type_list<Ss...>, F> {
         static constexpr bool value = (is_in_family<Ss, F>() || ...);
     };
-    
+
     // Checks if strong type has a skill from family F, it defaults to false for non-strong types.
     template <typename S, typename F>
     struct has_family_impl : std::false_type {};
@@ -340,7 +327,7 @@ namespace strong_detail {
         using full = resolve_skills_t<flatten_t<Skills...>>;
         static constexpr bool value = list_has_family<full, F>::value;
     };
-}
+} // namespace strong_detail
 
 // Public type traits.
 template <typename S>
@@ -350,11 +337,11 @@ template <typename S, typename F>
 inline constexpr bool has_family_v = strong_detail::has_family_impl<std::remove_cvref_t<S>, F>::value;
 
 template <typename S>
-requires is_strong_v<S>
+    requires is_strong_v<S>
 using underlying_t = typename std::remove_cvref_t<S>::value_type;
 
 template <typename T, typename Tag, typename... Skills>
-requires strong_detail::valid_strong_value<T>
+    requires strong_detail::valid_strong_value<T>
 class strong : public strong_detail::strong_base<T, strong<T, Tag, Skills...>, Skills...>::type {
     friend class skill_access;
 
@@ -362,15 +349,14 @@ public:
     using value_type = T;
     using tag_type = Tag;
 
-    constexpr strong() requires std::default_initializable<T> : value_() {}
+    constexpr strong()
+        requires std::default_initializable<T>
+        : value_() {}
 
     template <typename... Args>
-        requires
-        (sizeof...(Args) > 0) && 
-        std::constructible_from<T, Args...> &&
-        (!is_strong_v<Args> && ...)
+        requires(sizeof...(Args) > 0) && std::constructible_from<T, Args...> && (!is_strong_v<Args> && ...)
     constexpr explicit strong(Args&&... args) : value_(std::forward<Args>(args)...) {}
-    
+
     constexpr strong(const strong&) = default;
     constexpr strong(strong&&) = default;
     constexpr strong& operator=(const strong&) = default;
@@ -381,17 +367,15 @@ private:
     value_type value_;
     using base_info = strong_detail::strong_base<T, strong, Skills...>;
 
-    static_assert(base_info::no_duplicates,
-                "Explicit skill list cannot contain duplicate skills.");
+    static_assert(base_info::no_duplicates, "Explicit skill list cannot contain duplicate skills.");
 
     static_assert(base_info::no_family_conflict,
-                "Explicit skill list cannot contain multiple skills from the same family.");
+                  "Explicit skill list cannot contain multiple skills from the same family.");
 
     static_assert(base_info::all_mixins,
-                "Every skill on the full skill list must define a public mixin<Strong> template.");
+                  "Every skill on the full skill list must define a public mixin<Strong> template.");
 
-    static_assert(base_info::all_accepted,
-                "At least one skill does not accept the underlying value type T.");
+    static_assert(base_info::all_accepted, "At least one skill does not accept the underlying value type T.");
 };
 
 // Skill_access is class that's used by skills to get value
@@ -399,7 +383,7 @@ private:
 // and exposing static get() method.
 class skill_access {
 public:
-    template<typename S>
+    template <typename S>
         requires is_strong_v<S>
     static constexpr decltype(auto) get(S&& strong_object) {
         return (std::forward<S>(strong_object).value_);
@@ -415,7 +399,7 @@ namespace ops {
     struct ordering {};
     struct printing {};
     struct hashing {};
-}
+} // namespace ops
 
 // Skill is a type that has public mixin template with one type
 // argument. Mixin can define the function and then strong can
@@ -427,27 +411,24 @@ namespace ops {
 struct readable {
     using family = ops::access;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
-        constexpr decltype(auto) value() const {
-            return skill_access::get(static_cast<const S&>(*this));
-        }
+        constexpr decltype(auto) value() const { return skill_access::get(static_cast<const S&>(*this)); }
     };
 };
 
 // Addable allows adding strong types together,
 // using defined Op function (plus by default).
-template<auto Op>
+template <auto Op>
 struct addable_with {
     using family = ops::addition;
 
     // Accepted type must be constructible from return type of Op(T, T).
     template <typename T>
-    static constexpr bool accepts = requires(const T& x, const T& y) {
-        requires std::constructible_from<T, decltype(Op(x, y))>;
-    };
+    static constexpr bool accepts =
+        requires(const T& x, const T& y) { requires std::constructible_from<T, decltype(Op(x, y))>; };
 
-    template<typename S>
+    template <typename S>
     struct mixin {
         friend constexpr S operator+(const S& a, const S& b) {
             return S(Op(skill_access::get(a), skill_access::get(b)));
@@ -461,21 +442,15 @@ struct addable_with {
 using addable = addable_with<std::plus<>{}>;
 
 // Scalable allows scaling strong type by the factor of defined type.
-template<typename Scalar>
+template <typename Scalar>
 struct scalable {
     using family = ops::scaling;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
-        friend constexpr S operator*(const S& a, const Scalar& s) {
-            return S(skill_access::get(a) * s);
-        }
-        friend constexpr S operator*(const Scalar& s, const S& a) {
-            return a * s;
-        }
-        friend constexpr S operator/(const S& a, const Scalar& s) {
-            return S(skill_access::get(a) / s);
-        }
+        friend constexpr S operator*(const S& a, const Scalar& s) { return S(skill_access::get(a) * s); }
+        friend constexpr S operator*(const Scalar& s, const S& a) { return a * s; }
+        friend constexpr S operator/(const S& a, const Scalar& s) { return S(skill_access::get(a) / s); }
 
         friend constexpr S& operator*=(S& a, const Scalar& s) {
             a = a * s;
@@ -497,29 +472,27 @@ struct scalable {
 
 // Equality allows checking when two strong types are equal,
 // using given Eq function (equal_to by default).
-template<auto Eq>
+template <auto Eq>
 struct equality_with {
     using family = ops::equality;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
         friend constexpr bool operator==(const S& a, const S& b) {
             return Eq(skill_access::get(a), skill_access::get(b));
         }
-        friend constexpr bool operator!=(const S& a, const S& b) {
-            return !(a == b);
-        }
+        friend constexpr bool operator!=(const S& a, const S& b) { return !(a == b); }
     };
 };
 using equality = equality_with<std::equal_to<>{}>;
 
 // Ordered declares order on strong type, allowing to compare
 // strong types using Cmp function (compare_three_way by default).
-template<auto Cmp>
+template <auto Cmp>
 struct ordered_with {
     using family = ops::ordering;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
         friend constexpr auto operator<=>(const S& a, const S& b) {
             return Cmp(skill_access::get(a), skill_access::get(b));
@@ -527,7 +500,7 @@ struct ordered_with {
     };
 
     // Ordered needs equality.
-    using needs = equality_with<[](const auto& a, const auto& b){ return Cmp(a, b) == 0; }>;
+    using needs = equality_with<[](const auto& a, const auto& b) { return Cmp(a, b) == 0; }>;
 };
 using ordered = ordered_with<std::compare_three_way{}>;
 
@@ -540,17 +513,17 @@ namespace strong_detail {
         char data[N]{};
         constexpr fixed_string(const char (&s)[N]) { std::copy_n(s, N, data); }
     };
-}
+} // namespace strong_detail
 
 // Printable allows printing value of strong type
 // with defined suffix (empty by default).
 // We use fixed_string instead of const char*, since
 // const char* cannot be directly passed via template.
-template<strong_detail::fixed_string suffix = "">
+template <strong_detail::fixed_string suffix = "">
 struct printable {
     using family = ops::printing;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
         friend std::ostream& operator<<(std::ostream& os, const S& a) {
             os << skill_access::get(a) << suffix.data;
@@ -559,18 +532,16 @@ struct printable {
     };
 };
 
-// Hashable definies hashing function for strong type, so
+// Hashable defines hashing function for strong type, so
 // it can be used in e.g. unordered_map or unordered_set.
 // Hashing function is defined as template argument H (hash() by default).
-template<auto H>
+template <auto H>
 struct hashable_with {
     using family = ops::hashing;
 
-    template<typename S>
+    template <typename S>
     struct mixin {
-        friend constexpr std::size_t strong_hash_value(const S& a) {
-            return H(skill_access::get(a));
-        }
+        friend constexpr std::size_t strong_hash_value(const S& a) { return H(skill_access::get(a)); }
     };
 
     using needs = equality;
@@ -597,16 +568,18 @@ namespace strong_detail {
     struct std_hash {
         template <typename T>
             requires requires(const T& v) { std::hash<T>{}(v); }
-        constexpr std::size_t operator()(const T& v) const { return std::hash<T>{}(v); }
+        constexpr std::size_t operator()(const T& v) const {
+            return std::hash<T>{}(v);
+        }
     };
-}
+} // namespace strong_detail
 using hashable = hashable_with<strong_detail::std_hash{}>;
 
 // Allows one strong type to be converted into another,
 // using Conv function (identity by default).
-template<typename Target, auto Conv = std::identity{}>
+template <typename Target, auto Conv = std::identity{}>
 struct convertible_to {
-    template<typename S>
+    template <typename S>
     struct mixin {
         constexpr explicit operator Target() const {
             return static_cast<Target>(Conv(skill_access::get(static_cast<const S&>(*this))));
@@ -614,24 +587,22 @@ struct convertible_to {
     };
 
     // Accepted type must be constructible from the output of Conv function.
-    template<typename T>
-    static constexpr bool accepts = requires(const T& v) {
-        requires std::constructible_from<Target, decltype(Conv(v))>;
-    };
+    template <typename T>
+    static constexpr bool accepts =
+        requires(const T& v) { requires std::constructible_from<Target, decltype(Conv(v))>; };
 };
 
 // Divisible_by allows strong type to be divided by type Other
 // (which itself might or might not be strong type), resulting in
 // type Result, using Op function (divides by default).
-template<typename Other, typename Result, auto Op=std::divides<>{}>
+template <typename Other, typename Result, auto Op = std::divides<>{}>
 struct divisible_by {
-    template<typename S>
+    template <typename S>
     struct mixin {
         friend constexpr Result operator/(const S& a, const Other& o) {
             if constexpr (is_strong_v<Other>) {
                 return static_cast<Result>(Op(skill_access::get(a), skill_access::get(o)));
-            }
-            else {
+            } else {
                 return static_cast<Result>(Op(skill_access::get(a), o));
             }
         }
