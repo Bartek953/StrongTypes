@@ -394,6 +394,9 @@ private:
                 "At least one skill does not accept the underlying value type T.");
 };
 
+// Skill_access is class that's used by skills to get value
+// from strong types. It does this by being friend with strong class,
+// and exposing static get() method.
 class skill_access {
 public:
     template<typename S>
@@ -404,7 +407,7 @@ public:
 };
 
 namespace ops {
-    // Skill families
+    // Definitions of skill families.
     struct access {};
     struct addition {};
     struct scaling {};
@@ -414,7 +417,13 @@ namespace ops {
     struct hashing {};
 }
 
-// Skills
+// Skill is a type that has public mixin template with one type
+// argument. Mixin can define the function and then strong can
+// inherit this function, by inheriting from mixin with its own type.
+// This allows us to easily create new skills for strong types,
+// without the need to modify strong class itself.
+
+// Readable allows access to strong type's value via value() method.
 struct readable {
     using family = ops::access;
 
@@ -426,10 +435,13 @@ struct readable {
     };
 };
 
+// Addable allows adding strong types together,
+// using defined Op function (plus by default).
 template<auto Op>
 struct addable_with {
     using family = ops::addition;
 
+    // Accepted type must be constructible from return type of Op(T, T).
     template <typename T>
     static constexpr bool accepts = requires(const T& x, const T& y) {
         requires std::constructible_from<T, decltype(Op(x, y))>;
@@ -448,6 +460,7 @@ struct addable_with {
 };
 using addable = addable_with<std::plus<>{}>;
 
+// Scalable allows scaling strong type by the factor of defined type.
 template<typename Scalar>
 struct scalable {
     using family = ops::scaling;
@@ -474,6 +487,7 @@ struct scalable {
         }
     };
 
+    // Accepted type must be constructible from scaling operations.
     template <typename T>
     static constexpr bool accepts = requires(const T& a, const Scalar& s) {
         requires std::constructible_from<T, decltype(a * s)>;
@@ -481,6 +495,8 @@ struct scalable {
     };
 };
 
+// Equality allows checking when two strong types are equal,
+// using given Eq function (equal_to by default).
 template<auto Eq>
 struct equality_with {
     using family = ops::equality;
@@ -497,6 +513,8 @@ struct equality_with {
 };
 using equality = equality_with<std::equal_to<>{}>;
 
+// Ordered declares order on strong type, allowing to compare
+// strong types using Cmp function (compare_three_way by default).
 template<auto Cmp>
 struct ordered_with {
     using family = ops::ordering;
@@ -508,11 +526,15 @@ struct ordered_with {
         }
     };
 
+    // Ordered needs equality.
     using needs = equality_with<[](const auto& a, const auto& b){ return Cmp(a, b) == 0; }>;
 };
 using ordered = ordered_with<std::compare_three_way{}>;
 
 namespace strong_detail {
+    // Fixed_string is used as template argument for printable,
+    // since we can't pass const char* into template.
+    // This is just a wrapper around string literal.
     template <std::size_t N>
     struct fixed_string {
         char data[N]{};
@@ -520,6 +542,9 @@ namespace strong_detail {
     };
 }
 
+// Printable allows printing value of strong type
+// with defined suffix (empty by default).
+// We use fixed_string instead of const char*, since
 // const char* cannot be directly passed via template.
 template<strong_detail::fixed_string suffix = "">
 struct printable {
@@ -534,6 +559,9 @@ struct printable {
     };
 };
 
+// Hashable definies hashing function for strong type, so
+// it can be used in e.g. unordered_map or unordered_set.
+// Hashing function is defined as template argument H (hash() by default).
 template<auto H>
 struct hashable_with {
     using family = ops::hashing;
@@ -554,10 +582,7 @@ struct hashable_with {
     };
 };
 
-using hashable = hashable_with<[](const auto& v) {
-    return std::hash<std::remove_cvref_t<decltype(v)>>{}(v);
-}>;
-
+// Enabling hash for hashable strong type.
 template <typename T, typename Tag, typename... Skills>
     requires requires(const strong<T, Tag, Skills...>& s) { strong_hash_value(s); }
 struct std::hash<strong<T, Tag, Skills...>> {
@@ -566,6 +591,19 @@ struct std::hash<strong<T, Tag, Skills...>> {
     }
 };
 
+namespace strong_detail {
+    // Function wrapper for hashing (not a lambda),
+    // so that hashable is the same type in every translation unit.
+    struct std_hash {
+        template <typename T>
+            requires requires(const T& v) { std::hash<T>{}(v); }
+        constexpr std::size_t operator()(const T& v) const { return std::hash<T>{}(v); }
+    };
+}
+using hashable = hashable_with<strong_detail::std_hash{}>;
+
+// Allows one strong type to be converted into another,
+// using Conv function (identity by default).
 template<typename Target, auto Conv = std::identity{}>
 struct convertible_to {
     template<typename S>
@@ -575,12 +613,16 @@ struct convertible_to {
         }
     };
 
+    // Accepted type must be constructible from the output of Conv function.
     template<typename T>
     static constexpr bool accepts = requires(const T& v) {
         requires std::constructible_from<Target, decltype(Conv(v))>;
     };
 };
 
+// Divisible_by allows strong type to be divided by type Other
+// (which itself might or might not be strong type), resulting in
+// type Result, using Op function (divides by default).
 template<typename Other, typename Result, auto Op=std::divides<>{}>
 struct divisible_by {
     template<typename S>

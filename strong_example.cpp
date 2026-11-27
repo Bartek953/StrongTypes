@@ -17,6 +17,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_set>
+#include <iostream>
 
 namespace {
     // Pomocnicze koncepty do sprawdzania, które operacje są dostępne.
@@ -157,6 +158,8 @@ namespace {
 }
 
 int main() {
+    std::cout << "Running strong_example\n";
+
     meters a{3.0}, b{4.5};
     meters c = a + b;
     assert(c == meters{7.5});
@@ -249,4 +252,6 @@ int main() {
 
     // Nie kompiluje się, countable obsługuje tylko typy całkowite.
     // strong<double, struct t5, countable> k;
+
+    std::cout << "Strong example: OK\n";
 }
