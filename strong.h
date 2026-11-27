@@ -303,11 +303,12 @@ namespace strong_detail {
         using explicit_skills = flatten_t<Skills...>;
         using full_skills = resolve_skills_t<explicit_skills>;
 
-        static constexpr bool valid =
-            !has_duplicates_v<explicit_skills> &&
-            !has_family_conflict_v<explicit_skills> &&
-            all_have_mixin_v<full_skills, Strong> &&
-            all_accept_type_v<full_skills, T>;
+        static constexpr bool no_duplicates = !has_duplicates_v<explicit_skills>;
+        static constexpr bool no_family_conflict = !has_family_conflict_v<explicit_skills>;
+        static constexpr bool all_mixins = all_have_mixin_v<full_skills, Strong>;
+        static constexpr bool all_accepted = all_accept_type_v<full_skills, T>;
+        
+        static constexpr bool valid = no_duplicates && no_family_conflict && all_mixins && all_accepted;
 
         using type = inherit_mixins<Strong, full_skills, valid>;
     };
@@ -378,21 +379,19 @@ public:
 
 private:
     value_type value_;
-    using explicit_skills = strong_detail::flatten_t<Skills...>;
+    using base_info = strong_detail::strong_base<T, strong, Skills...>;
 
-    static_assert(!strong_detail::has_duplicates_v<explicit_skills>, 
+    static_assert(base_info::no_duplicates,
                 "Explicit skill list cannot contain duplicate skills.");
 
-    static_assert(!strong_detail::has_family_conflict_v<explicit_skills>,
+    static_assert(base_info::no_family_conflict,
                 "Explicit skill list cannot contain multiple skills from the same family.");
 
-    using full_skills = strong_detail::resolve_skills_t<explicit_skills>;
+    static_assert(base_info::all_mixins,
+                "Every skill on the full skill list must define a public mixin<Strong> template.");
 
-    static_assert(strong_detail::all_have_mixin_v<full_skills, strong>,
-        "Every skill on the full skill list must define a public mixin<Strong> template.");
-
-    static_assert(strong_detail::all_accept_type_v<full_skills, T>,
-        "At least one skill does not accept the underlying value type T.");
+    static_assert(base_info::all_accepted,
+                "At least one skill does not accept the underlying value type T.");
 };
 
 class skill_access {
